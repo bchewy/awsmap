@@ -6,6 +6,8 @@ import { OrbitControls, Html, useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 import { TextureLoader } from 'three';
 import { AWSRegion, awsRegions } from '@/types/aws';
+import { AzureRegion, azureRegions } from '@/types/azure';
+import { CloudProvider } from '@/types/common';
 import InfoPanel from './InfoPanel';
 import { useTheme, themeStyles } from '@/contexts/ThemeContext';
 
@@ -67,7 +69,7 @@ function WebGLContextHandler() {
 
 // Hexagonal AWS region marker with floating data points
 function RegionMarker({ region, position, isSelected, onClick }: { 
-  region: AWSRegion; 
+  region: AWSRegion | AzureRegion; 
   position: THREE.Vector3; 
   isSelected: boolean; 
   onClick: () => void;
@@ -433,7 +435,9 @@ function FilterSidebar({
   showLocalZoneConnections, 
   setShowLocalZoneConnections,
   animateConnections,
-  setAnimateConnections
+  setAnimateConnections,
+  provider,
+  setProvider
 }: {
   showRegionConnections: boolean;
   setShowRegionConnections: (value: boolean) => void;
@@ -441,13 +445,54 @@ function FilterSidebar({
   setShowLocalZoneConnections: (value: boolean) => void;
   animateConnections: boolean;
   setAnimateConnections: (value: boolean) => void;
+  provider: CloudProvider;
+  setProvider: (value: CloudProvider) => void;
 }) {
   const { theme } = useTheme();
   const styles = themeStyles[theme];
   
   return (
     <div className={`absolute top-1/2 right-4 transform -translate-y-1/2 ${styles.panelBg} rounded-lg p-4 w-64 z-10 transition-colors`} style={{ color: 'var(--foreground)' }}>
-      <h2 className="text-lg font-bold mb-4 border-b pb-2" style={{ borderColor: 'var(--accent)' }}>Connection Filters</h2>
+      <h2 className="text-lg font-bold mb-4 border-b pb-2" style={{ borderColor: 'var(--accent)' }}>Filters</h2>
+      
+      {/* Provider Selection */}
+      <div className="mb-4 border-b pb-3" style={{ borderColor: 'var(--accent)', opacity: 0.7 }}>
+        <h3 className="text-sm font-semibold mb-2">Cloud Provider</h3>
+        <div className="flex space-x-2">
+          <button
+            className={`px-3 py-1.5 rounded text-sm transition-colors ${
+              provider === 'aws' 
+                ? 'ring-1 ring-opacity-50 font-medium' 
+                : 'opacity-70 hover:opacity-100'
+            }`}
+            style={{ 
+              backgroundColor: provider === 'aws' ? 'var(--accent)' : 'transparent',
+              color: provider === 'aws' ? 'var(--background)' : 'var(--foreground)',
+              ringColor: 'var(--accent)'
+            }}
+            onClick={() => setProvider('aws')}
+          >
+            AWS
+          </button>
+          <button
+            className={`px-3 py-1.5 rounded text-sm transition-colors ${
+              provider === 'azure' 
+                ? 'ring-1 ring-opacity-50 font-medium' 
+                : 'opacity-70 hover:opacity-100'
+            }`}
+            style={{ 
+              backgroundColor: provider === 'azure' ? 'var(--accent)' : 'transparent',
+              color: provider === 'azure' ? 'var(--background)' : 'var(--foreground)',
+              ringColor: 'var(--accent)'
+            }}
+            onClick={() => setProvider('azure')}
+          >
+            Azure
+          </button>
+        </div>
+      </div>
+      
+      <h3 className="text-sm font-semibold mb-2">Connection Filters</h3>
       <div className="space-y-4">
         <div className="flex items-center">
           <label className="inline-flex items-center cursor-pointer">
@@ -504,16 +549,18 @@ function GlobeObject({
   onRegionSelect,
   showRegionConnections,
   showLocalZoneConnections,
-  animateConnections
+  animateConnections,
+  provider
 }: { 
-  onRegionSelect: (region: AWSRegion | null) => void;
+  onRegionSelect: (region: AWSRegion | AzureRegion | null) => void;
   showRegionConnections: boolean;
   showLocalZoneConnections: boolean;
   animateConnections: boolean;
+  provider: CloudProvider;
 }) {
   const globeRef = useRef<THREE.Group>(null);
   const cloudRef = useRef<THREE.Mesh>(null);
-  const [selectedRegion, setSelectedRegion] = useState<AWSRegion | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<AWSRegion | AzureRegion | null>(null);
   
   // Load textures with better options
   const earthMap = useLoader(TextureLoader, '/textures/earth-topo-16k.jpg');
@@ -545,9 +592,14 @@ function GlobeObject({
     }
   }, []);
   
+  // Get regions based on selected provider
+  const regions = useMemo(() => {
+    return provider === 'aws' ? awsRegions : azureRegions;
+  }, [provider]);
+  
   // Convert lat/long to 3D coordinates
   const regionPositions = useMemo(() => {
-    return awsRegions.map(region => {
+    return regions.map(region => {
       // Convert latitude and longitude from degrees to radians
       const latRad = region.location.lat * (Math.PI / 180);
       const lngRad = region.location.lng * (Math.PI / 180);
@@ -567,7 +619,7 @@ function GlobeObject({
         position: new THREE.Vector3(x, y, z)
       };
     });
-  }, []);
+  }, [regions]);
   
   // Calculate connections between regions and local zones based on filters
   const connections = useMemo(() => {
@@ -660,7 +712,7 @@ function GlobeObject({
   }, [regionPositions, selectedRegion, showRegionConnections, showLocalZoneConnections]);
   
   // Handle region selection
-  const handleRegionClick = (region: AWSRegion) => {
+  const handleRegionClick = (region: AWSRegion | AzureRegion) => {
     setSelectedRegion(region);
     onRegionSelect(region);
   };
@@ -841,11 +893,17 @@ function StarField() {
 // Main component
 export default function Globe() {
   const { theme } = useTheme();
-  const [selectedRegion, setSelectedRegion] = useState<AWSRegion | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<AWSRegion | AzureRegion | null>(null);
   const [webglFailed, setWebglFailed] = useState(false);
   const [showRegionConnections, setShowRegionConnections] = useState(true);
   const [showLocalZoneConnections, setShowLocalZoneConnections] = useState(false);
   const [animateConnections, setAnimateConnections] = useState(true);
+  const [provider, setProvider] = useState<CloudProvider>('aws');
+  
+  // Reset selected region when changing provider
+  useEffect(() => {
+    setSelectedRegion(null);
+  }, [provider]);
   
   // Background color based on theme
   const canvasBackgroundColor = useMemo(() => {
@@ -924,6 +982,7 @@ export default function Globe() {
             showRegionConnections={showRegionConnections}
             showLocalZoneConnections={showLocalZoneConnections}
             animateConnections={animateConnections}
+            provider={provider}
           />
         </Suspense>
         
@@ -949,19 +1008,26 @@ export default function Globe() {
         setShowLocalZoneConnections={setShowLocalZoneConnections}
         animateConnections={animateConnections}
         setAnimateConnections={setAnimateConnections}
+        provider={provider}
+        setProvider={setProvider}
       />
       
       {/* Info panel */}
       <InfoPanel region={selectedRegion} />
       
-      {/* Title - Fixed overlapping text issue */}
+      {/* Title - Update to reflect selected provider */}
       <div className="absolute top-4 left-4 text-white">
-        <h1 className="text-3xl font-bold mb-2">
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600 inline-block">
-            AWS Global Infrastructure
-          </span>
-        </h1>
-        <p className="text-sm opacity-75">Explore AWS regions and their interconnections</p>
+        <div className="flex items-center mb-2">
+          <div className="mr-3 text-2xl">
+            {provider === 'aws' ? '☁️' : '⚡'}
+          </div>
+          <h1 className="text-3xl font-bold">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600 inline-block">
+              {provider === 'aws' ? 'AWS' : 'Azure'} Global Infrastructure
+            </span>
+          </h1>
+        </div>
+        <p className="text-sm opacity-75">Explore {provider === 'aws' ? 'AWS' : 'Azure'} regions and their interconnections</p>
       </div>
     </div>
   );

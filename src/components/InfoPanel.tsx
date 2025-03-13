@@ -1,11 +1,12 @@
 'use client';
 
 import { AWSRegion } from '@/types/aws';
+import { AzureRegion } from '@/types/azure';
 import { useState } from 'react';
 import { useTheme, ThemeName, themeStyles } from '@/contexts/ThemeContext';
 
 interface InfoPanelProps {
-  region: AWSRegion | null;
+  region: AWSRegion | AzureRegion | null;
 }
 
 export default function InfoPanel({ region }: InfoPanelProps) {
@@ -63,7 +64,7 @@ export default function InfoPanel({ region }: InfoPanelProps) {
   }
 
   // Generate availability zone names for the region (not for local zones)
-  const availabilityZones = !region.isLocalZone 
+  const availabilityZones = !region.isLocalZone && region.availabilityZones > 0
     ? Array.from({ length: region.availabilityZones }).map((_, index) => {
         const zoneSuffix = String.fromCharCode(97 + index); // a, b, c, etc.
         return `${region.code}${zoneSuffix}`;
@@ -81,15 +82,17 @@ export default function InfoPanel({ region }: InfoPanelProps) {
           <div>
             <div className="flex justify-between items-center">
               <p>Availability Zones: {region.availabilityZones}</p>
-              <button 
-                onClick={() => setShowDetailedView(!showDetailedView)}
-                className={`text-xs ${styles.buttonBg} px-2 py-1 rounded ml-2 transition-colors`}
-              >
-                {showDetailedView ? 'Hide Details' : 'Show Details'}
-              </button>
+              {region.availabilityZones > 0 && (
+                <button 
+                  onClick={() => setShowDetailedView(!showDetailedView)}
+                  className={`text-xs ${styles.buttonBg} px-2 py-1 rounded ml-2 transition-colors`}
+                >
+                  {showDetailedView ? 'Hide Details' : 'Show Details'}
+                </button>
+              )}
             </div>
             
-            {showDetailedView && (
+            {showDetailedView && region.availabilityZones > 0 && (
               <div className="mt-2 ml-4 space-y-1 border-l-2 pl-2" style={{ borderColor: 'var(--accent)' }}>
                 {availabilityZones.map((zone) => (
                   <div key={zone} className="flex items-center">
@@ -103,7 +106,7 @@ export default function InfoPanel({ region }: InfoPanelProps) {
         )}
         <p>Launched: {region.launched}</p>
         <p className="text-xs mt-2 text-gray-400">
-          Location: {region.location.lat.toFixed(2)}°N, {region.location.lng.toFixed(2)}°E
+          Location: {region.location.lat.toFixed(2)}°, {region.location.lng.toFixed(2)}°
         </p>
       </div>
       <div className={`mt-3 pt-2 border-t ${styles.borderColor}`}>
